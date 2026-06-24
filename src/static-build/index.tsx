@@ -75,9 +75,8 @@ const toOutput: Output = {
         purpose: 'maskable',
       },
     ],
-    description:
-      'Compress and compare images with different codecs, right in your browser.',
-    lang: 'en',
+    description: '直接在浏览器中使用不同编码器压缩并对比图片。',
+    lang: 'zh-CN',
     categories: ['photo', 'productivity', 'utilities'],
     screenshots,
     share_target: {
@@ -97,15 +96,12 @@ const toOutput: Output = {
   _headers: dedent`
     /*
       Cache-Control: no-cache
+      Cross-Origin-Embedder-Policy: require-corp
+      Cross-Origin-Opener-Policy: same-origin
 
     # I don't think Rollup is cache-busting files correctly.
     #/c/*
     #  Cache-Control: max-age=31536000
-
-    # COOP+COEP for WebAssembly threads.
-    /*
-      Cross-Origin-Embedder-Policy: require-corp
-      Cross-Origin-Opener-Policy: same-origin
   `,
 };
 

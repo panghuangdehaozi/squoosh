@@ -161,12 +161,12 @@ export default class Output extends Component<Props, State> {
   };
 
   private zoomIn = () => {
-    if (!this.pinchZoomLeft) throw Error('Missing pinch-zoom element');
+    if (!this.pinchZoomLeft) throw Error('缺少缩放元素');
     this.pinchZoomLeft.scaleTo(this.state.scale * 1.25, scaleToOpts);
   };
 
   private zoomOut = () => {
-    if (!this.pinchZoomLeft) throw Error('Missing pinch-zoom element');
+    if (!this.pinchZoomLeft) throw Error('缺少缩放元素');
     this.pinchZoomLeft.scaleTo(this.state.scale / 1.25, scaleToOpts);
   };
 
@@ -203,14 +203,14 @@ export default class Output extends Component<Props, State> {
     const target = event.target as HTMLInputElement;
     const percent = parseFloat(target.value);
     if (isNaN(percent)) return;
-    if (!this.pinchZoomLeft) throw Error('Missing pinch-zoom element');
+    if (!this.pinchZoomLeft) throw Error('缺少缩放元素');
 
     this.pinchZoomLeft.scaleTo(percent / 100, scaleToOpts);
   };
 
   private onPinchZoomLeftChange = (event: Event) => {
     if (!this.pinchZoomRight || !this.pinchZoomLeft) {
-      throw Error('Missing pinch-zoom element');
+      throw Error('缺少缩放元素');
     }
     this.setState({
       scale: this.pinchZoomLeft.scale,
@@ -232,7 +232,7 @@ export default class Output extends Component<Props, State> {
    */
   private onRetargetableEvent = (event: Event) => {
     const targetEl = event.target as HTMLElement;
-    if (!this.pinchZoomLeft) throw Error('Missing pinch-zoom element');
+    if (!this.pinchZoomLeft) throw Error('缺少缩放元素');
     // If the event is on the handle of the two-up, let it through,
     // unless it's a wheel event, in which case always let it through.
     if (event.type !== 'wheel' && targetEl.closest(`.${twoUpHandle}`)) return;
@@ -365,7 +365,7 @@ export default class Output extends Component<Props, State> {
             <button
               class={style.firstButton}
               onClick={this.onRotateClick}
-              title="Rotate"
+              title="旋转"
             >
               <RotateIcon />
             </button>
@@ -373,7 +373,7 @@ export default class Output extends Component<Props, State> {
               <button
                 class={style.button}
                 onClick={this.toggleAliasing}
-                title="Toggle smoothing"
+                title="切换平滑"
               >
                 {aliasing ? (
                   <ToggleAliasingActiveIcon />
@@ -385,7 +385,7 @@ export default class Output extends Component<Props, State> {
             <button
               class={style.lastButton}
               onClick={this.toggleBackground}
-              title="Toggle background"
+              title="切换背景"
             >
               {altBackground ? (
                 <ToggleBackgroundActiveIcon />

@@ -11,6 +11,12 @@ export interface SnackOptions {
   actions?: string[];
 }
 
+const actionLabels: { [action: string]: string } = {
+  dismiss: '关闭',
+  reload: '重新加载',
+  undo: '撤销',
+};
+
 function createSnack(
   message: string,
   options: SnackOptions,
@@ -35,7 +41,7 @@ function createSnack(
     for (const action of actions) {
       const button = document.createElement('button');
       button.className = style.button;
-      button.textContent = action;
+      button.textContent = actionLabels[action] || action;
       button.addEventListener('click', () => {
         clearTimeout(timeoutId);
         resolve(action);

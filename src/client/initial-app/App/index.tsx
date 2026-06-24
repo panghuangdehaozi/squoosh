@@ -50,7 +50,7 @@ export default class App extends Component<Props, State> {
         this.setState({ Compress: module.default });
       })
       .catch(() => {
-        this.showSnack('Failed to load app');
+        this.showSnack('应用加载失败');
       });
 
     swBridgePromise.then(async ({ offliner, getSharedImage }) => {
@@ -90,7 +90,7 @@ export default class App extends Component<Props, State> {
     message: string,
     options: SnackOptions = {},
   ): Promise<string> => {
-    if (!this.snackbar) throw Error('Snackbar missing');
+    if (!this.snackbar) throw Error('缺少提示条');
     return this.snackbar.showSnackbar(message, options);
   };
 

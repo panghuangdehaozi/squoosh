@@ -14,6 +14,6 @@ export default async function decode(blob: Blob): Promise<ImageData> {
   ]);
 
   const result = module.decode(data);
-  if (!result) throw new Error('Decoding error');
+  if (!result) throw new Error('解码错误');
   return result;
 }

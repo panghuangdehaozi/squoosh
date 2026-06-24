@@ -15,7 +15,7 @@ import { UVMode, Csp } from 'codecs/wp2/enc/wp2_enc';
 
 export { EncodeOptions, UVMode, Csp };
 
-export const label = 'WebP v2 (unstable)';
+export const label = 'WebP v2（不稳定）';
 export const mimeType = 'image/webp2';
 export const extension = 'wp2';
 export const defaultOptions: EncodeOptions = {

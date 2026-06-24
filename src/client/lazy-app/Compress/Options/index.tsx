@@ -168,17 +168,17 @@ export default class Options extends Component<Props, State> {
             <div>
               <h3 class={style.optionsTitle}>
                 <div class={style.titleAndButtons}>
-                  Edit
+                  编辑
                   <button
                     class={style.copyOverButton}
-                    title="Copy settings to other side"
+                    title="复制设置到另一侧"
                     onClick={this.onCopyToOtherSideClick}
                   >
                     <SwapIcon />
                   </button>
                   <button
                     class={style.saveButton}
-                    title="Save side settings"
+                    title="保存此侧设置"
                     onClick={this.onSaveSideSettingClick}
                   >
                     <SaveIcon />
@@ -195,7 +195,7 @@ export default class Options extends Component<Props, State> {
                         ? style.buttonOpacity
                         : '')
                     }
-                    title="Import saved side settings"
+                    title="导入已保存的此侧设置"
                     onClick={this.onImportSideSettingsClick}
                     disabled={
                       // Disabled if this side's settings haven't been saved
@@ -209,7 +209,7 @@ export default class Options extends Component<Props, State> {
                 </div>
               </h3>
               <label class={style.sectionEnabler}>
-                Resize
+                调整尺寸
                 <Toggle
                   name="resize.enable"
                   checked={!!processorState.resize.enabled}
@@ -229,7 +229,7 @@ export default class Options extends Component<Props, State> {
               </Expander>
 
               <label class={style.sectionEnabler}>
-                Reduce palette
+                减少调色板
                 <Toggle
                   name="quantize.enable"
                   checked={!!processorState.quantize.enabled}
@@ -248,7 +248,7 @@ export default class Options extends Component<Props, State> {
           )}
         </Expander>
 
-        <h3 class={style.optionsTitle}>Compress</h3>
+        <h3 class={style.optionsTitle}>压缩</h3>
 
         <section class={`${style.optionOneCell} ${style.optionsSection}`}>
           {supportedEncoderMap ? (
@@ -257,7 +257,7 @@ export default class Options extends Component<Props, State> {
               onChange={this.onEncoderTypeChange}
               large
             >
-              <option value="identity">{`Original Image ${
+              <option value="identity">{`原始图片 ${
                 this.props.source ? `(${this.props.source.file.name})` : ''
               }`}</option>
               {Object.entries(supportedEncoderMap).map(([type, encoder]) => (
@@ -266,7 +266,7 @@ export default class Options extends Component<Props, State> {
             </Select>
           ) : (
             <Select large>
-              <option>Loading…</option>
+              <option>加载中…</option>
             </Select>
           )}
         </section>

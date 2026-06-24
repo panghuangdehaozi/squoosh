@@ -103,7 +103,7 @@
                 async () => {
                   n
                     ? location.reload()
-                    : t('Ready to work offline', { timeout: 5e3 });
+                    : t('已可离线使用', { timeout: 5e3 });
                 },
               ),
               !n)
@@ -113,7 +113,7 @@
             r &&
               (await a(r),
               'reload' ===
-                (await t('Update available', {
+                (await t('有可用更新', {
                   actions: ['reload', 'dismiss'],
                 })) &&
                 (async function () {

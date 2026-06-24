@@ -49,10 +49,6 @@ import * as wp2EncMtSimd from 'entry-data:codecs/wp2/enc/wp2_enc_mt_simd';
 import * as wp2EncMt from 'entry-data:codecs/wp2/enc/wp2_enc_mt';
 import * as wp2Enc from 'entry-data:codecs/wp2/enc/wp2_enc';
 
-export function shouldCacheDynamically(url: string) {
-  return url.startsWith('/c/demo-');
-}
-
 let initialJs = new Set([
   compress.main,
   ...compress.deps,
@@ -68,9 +64,7 @@ initialJs = subtractSets(
     ...initialApp.deps.filter(
       (item) =>
         // Exclude JS deps that have been inlined:
-        item.endsWith('.js') ||
-        // As well as large image deps we want to keep dynamic:
-        shouldCacheDynamically(item),
+        item.endsWith('.js'),
     ),
     // Exclude features Worker itself - it's referenced from the main app,
     // but is meant to be cached lazily.

@@ -14,7 +14,7 @@ export interface EncodeOptions {
   quality: number;
 }
 
-export const label = 'Browser JPEG';
+export const label = '浏览器 JPEG';
 export const mimeType = 'image/jpeg';
 export const extension = 'jpg';
 export const defaultOptions: EncodeOptions = { quality: 0.75 };

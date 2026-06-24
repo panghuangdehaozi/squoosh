@@ -120,7 +120,7 @@ async function decodeImage(
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err;
     console.log(err);
-    throw Error("Couldn't decode image");
+    throw Error('无法解码图片');
   }
 }
 
@@ -232,7 +232,7 @@ async function processSvg(
   }
 
   const viewBox = svg.getAttribute('viewBox');
-  if (viewBox === null) throw Error('SVG must have width/height or viewBox');
+  if (viewBox === null) throw Error('SVG 必须包含 width/height 或 viewBox');
 
   const viewboxParts = viewBox.split(/\s+/);
   svg.setAttribute('width', viewboxParts[2]);
@@ -431,7 +431,7 @@ export default class Compress extends Component<Props, State> {
       sides: cleanSet(this.state.sides, otherIndex, newSettings),
     });
 
-    const result = await this.props.showSnack('Settings copied across', {
+    const result = await this.props.showSnack('设置已复制到另一侧', {
       timeout: 5000,
       actions: ['undo', 'dismiss'],
     });
@@ -457,7 +457,7 @@ export default class Compress extends Component<Props, State> {
       localStorage.setItem('leftSideSettings', leftSideSettings);
       // Firing an event when we save side settings in localstorage
       window.dispatchEvent(new CustomEvent('leftSideSettings'));
-      await this.props.showSnack('Left side settings saved', {
+      await this.props.showSnack('左侧设置已保存', {
         timeout: 1500,
         actions: ['dismiss'],
       });
@@ -472,7 +472,7 @@ export default class Compress extends Component<Props, State> {
       localStorage.setItem('rightSideSettings', rightSideSettings);
       // Firing an event when we save side settings in localstorage
       window.dispatchEvent(new CustomEvent('rightSideSettings'));
-      await this.props.showSnack('Right side settings saved', {
+      await this.props.showSnack('右侧设置已保存', {
         timeout: 1500,
         actions: ['dismiss'],
       });
@@ -499,7 +499,7 @@ export default class Compress extends Component<Props, State> {
       this.setState({
         sides: cleanSet(this.state.sides, index, newLeftSideSettings),
       });
-      const result = await this.props.showSnack('Left side settings imported', {
+      const result = await this.props.showSnack('左侧设置已导入', {
         timeout: 3000,
         actions: ['undo', 'dismiss'],
       });
@@ -521,7 +521,7 @@ export default class Compress extends Component<Props, State> {
         sides: cleanSet(this.state.sides, index, newRightSideSettings),
       });
       const result = await this.props.showSnack(
-        'Right side settings imported',
+        '右侧设置已导入',
         {
           timeout: 3000,
           actions: ['undo', 'dismiss'],
@@ -724,7 +724,7 @@ export default class Compress extends Component<Props, State> {
         });
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        this.props.showSnack(`Source decoding error: ${err}`);
+        this.props.showSnack(`源图片解码错误：${err}`);
         throw err;
       }
     } else {
@@ -783,7 +783,7 @@ export default class Compress extends Component<Props, State> {
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         this.setState({ loading: false });
-        this.props.showSnack(`Preprocessing error: ${err}`);
+        this.props.showSnack(`预处理错误：${err}`);
         throw err;
       }
     } else {
@@ -912,7 +912,7 @@ export default class Compress extends Component<Props, State> {
           });
           return { sides };
         });
-        this.props.showSnack(`Processing error: ${err}`);
+        this.props.showSnack(`处理错误：${err}`);
         throw err;
       }
     });
@@ -951,7 +951,7 @@ export default class Compress extends Component<Props, State> {
         typeLabel={
           side.latestSettings.encoderState
             ? encoderMap[side.latestSettings.encoderState.type].meta.label
-            : `${side.file ? `${side.file.name}` : 'Original Image'}`
+            : `${side.file ? `${side.file.name}` : '原始图片'}`
         }
       />
     ));
@@ -983,7 +983,7 @@ export default class Compress extends Component<Props, State> {
         />
         <button class={style.back} onClick={onBack}>
           <svg viewBox="0 0 61 53.3">
-            <title>Back</title>
+            <title>返回</title>
             <path
               class={style.backBlob}
               d="M0 25.6c-.5-7.1 4.1-14.5 10-19.1S23.4.1 32.2 0c8.8 0 19 1.6 24.4 8s5.6 17.8 1.7 27a29.7 29.7 0 01-20.5 18c-8.4 1.5-17.3-2.6-24.5-8S.5 32.6.1 25.6z"

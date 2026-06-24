@@ -12,7 +12,7 @@
  */
 export interface EncodeOptions {}
 
-export const label = 'Browser PNG';
+export const label = '浏览器 PNG';
 export const mimeType = 'image/png';
 export const extension = 'png';
 export const defaultOptions: EncodeOptions = {};

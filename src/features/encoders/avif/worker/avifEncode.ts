@@ -35,7 +35,7 @@ export default async function encode(
   const module = await emscriptenModule;
   const result = module.encode(data.data, data.width, data.height, options);
 
-  if (!result) throw new Error('Encoding error');
+  if (!result) throw new Error('编码错误');
 
   return result.buffer;
 }

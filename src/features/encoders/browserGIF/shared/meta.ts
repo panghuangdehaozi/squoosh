@@ -12,7 +12,7 @@
  */
 export interface EncodeOptions {}
 
-export const label = 'Browser GIF';
+export const label = '浏览器 GIF';
 export const mimeType = 'image/gif';
 export const extension = 'gif';
 export const defaultOptions: EncodeOptions = {};

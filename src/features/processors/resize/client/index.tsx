@@ -88,7 +88,7 @@ export async function resize(
   workerBridge: WorkerBridge,
 ) {
   if (options.method === 'vector') {
-    if (!source.vectorImage) throw Error('No vector image available');
+    if (!source.vectorImage) throw Error('没有可用的矢量图片');
     return vectorResize(source.vectorImage, options);
   }
   if (isWorkerOptions(options)) {
@@ -232,35 +232,35 @@ export class Options extends Component<Props, State> {
         onSubmit={preventDefault}
       >
         <label class={style.optionTextFirst}>
-          Method:
+          方法：
           <Select
             name="resizeMethod"
             value={options.method}
             onChange={this.onChange}
           >
-            {isVector && <option value="vector">Vector</option>}
+            {isVector && <option value="vector">矢量</option>}
             <option value="lanczos3">Lanczos3</option>
             <option value="mitchell">Mitchell</option>
             <option value="catrom">Catmull-Rom</option>
-            <option value="triangle">Triangle (bilinear)</option>
-            <option value="hqx">hqx (pixel art)</option>
-            <option value="browser-pixelated">Browser pixelated</option>
-            <option value="browser-low">Browser low quality</option>
-            <option value="browser-medium">Browser medium quality</option>
-            <option value="browser-high">Browser high quality</option>
+            <option value="triangle">三角形（双线性）</option>
+            <option value="hqx">hqx（像素艺术）</option>
+            <option value="browser-pixelated">浏览器像素化</option>
+            <option value="browser-low">浏览器低质量</option>
+            <option value="browser-medium">浏览器中等质量</option>
+            <option value="browser-high">浏览器高质量</option>
           </Select>
         </label>
         <label class={style.optionTextFirst}>
-          Preset:
+          预设：
           <Select value={this.getPreset()} onChange={this.onPresetChange}>
             {sizePresets.map((preset) => (
               <option value={preset}>{preset * 100}%</option>
             ))}
-            <option value="custom">Custom</option>
+            <option value="custom">自定义</option>
           </Select>
         </label>
         <label class={style.optionTextFirst}>
-          Width:
+          宽度：
           <input
             required
             class={style.textField}
@@ -272,7 +272,7 @@ export class Options extends Component<Props, State> {
           />
         </label>
         <label class={style.optionTextFirst}>
-          Height:
+          高度：
           <input
             required
             class={style.textField}
@@ -286,7 +286,7 @@ export class Options extends Component<Props, State> {
         <Expander>
           {isWorkerOptions(options) ? (
             <label class={style.optionToggle}>
-              Premultiply alpha channel
+              预乘 Alpha 通道
               <Checkbox
                 name="premultiply"
                 checked={options.premultiply}
@@ -296,7 +296,7 @@ export class Options extends Component<Props, State> {
           ) : null}
           {isWorkerOptions(options) ? (
             <label class={style.optionToggle}>
-              Linear RGB
+              线性 RGB
               <Checkbox
                 name="linearRGB"
                 checked={options.linearRGB}
@@ -306,7 +306,7 @@ export class Options extends Component<Props, State> {
           ) : null}
         </Expander>
         <label class={style.optionToggle}>
-          Maintain aspect ratio
+          保持宽高比
           <Checkbox
             name="maintainAspect"
             checked={maintainAspect}
@@ -316,14 +316,14 @@ export class Options extends Component<Props, State> {
         <Expander>
           {maintainAspect ? null : (
             <label class={style.optionTextFirst}>
-              Fit method:
+              适配方式：
               <Select
                 name="fitMethod"
                 value={options.fitMethod}
                 onChange={this.onChange}
               >
-                <option value="stretch">Stretch</option>
-                <option value="contain">Contain</option>
+                <option value="stretch">拉伸</option>
+                <option value="contain">包含</option>
               </Select>
             </label>
           )}

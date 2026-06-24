@@ -1,20 +1,16 @@
 import {
-  cacheOrNetworkAndCache,
-  cleanupCache,
   cacheOrNetwork,
   cacheBasics,
   cacheAdditionalProcessors,
   serveShareTarget,
 } from './util';
 import { get } from 'idb-keyval';
-import { shouldCacheDynamically } from './to-cache';
 
 // Give TypeScript the correct global.
 declare var self: ServiceWorkerGlobalScope;
 
 const versionedCache = 'static-' + VERSION;
-const dynamicCache = 'dynamic';
-const expectedCaches = [versionedCache, dynamicCache];
+const expectedCaches = [versionedCache];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -70,12 +66,6 @@ self.addEventListener('fetch', (event) => {
 
   // We only care about GET from here on in.
   if (event.request.method !== 'GET') return;
-
-  if (shouldCacheDynamically(url.pathname)) {
-    cacheOrNetworkAndCache(event, dynamicCache);
-    cleanupCache(event, dynamicCache, ASSETS);
-    return;
-  }
 
   cacheOrNetwork(event);
 });

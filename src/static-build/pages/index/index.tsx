@@ -25,12 +25,12 @@ import * as snackbarStyle from '../../../shared/custom-els/snack-bar/styles.css'
 interface Props {}
 
 const Index: FunctionalComponent<Props> = () => (
-  <html lang="en">
+  <html lang="zh-CN">
     <head>
       <title>Squoosh</title>
       <meta
         name="description"
-        content="Squoosh is the ultimate image optimizer that allows you to compress and compare images with different codecs in your browser."
+        content="Squoosh 是一款浏览器端图片优化工具，可使用多种编码器压缩并对比图片。"
       />
       <meta name="twitter:card" content="summary" />
       <meta name="twitter:site" content="@SquooshApp" />
@@ -46,11 +46,11 @@ const Index: FunctionalComponent<Props> = () => (
       <meta property="og:image:height" content="500" />
       <meta
         property="og:image:alt"
-        content="A cartoon of a hand squeezing an image file on a dark background."
+        content="深色背景上一只手正在压缩图片文件的卡通图。"
       />
       <meta
         name="og:description"
-        content="Squoosh is the ultimate image optimizer that allows you to compress and compare images with different codecs in your browser."
+        content="Squoosh 是一款浏览器端图片优化工具，可使用多种编码器压缩并对比图片。"
       />
       <meta
         name="viewport"
@@ -89,11 +89,10 @@ const Index: FunctionalComponent<Props> = () => (
               aria-hidden="false"
             >
               <div class={snackbarStyle.text}>
-                Initialization error: This site requires JavaScript, which is
-                disabled in your browser.
+                初始化错误：此网站需要 JavaScript，但你的浏览器已禁用。
               </div>
               <a class={snackbarStyle.button} href="/">
-                reload
+                重新加载
               </a>
             </div>
           </snack-bar>
