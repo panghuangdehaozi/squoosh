@@ -11,6 +11,8 @@ import {
   abortable,
   assertSignal,
   ImageMimeTypes,
+  ProcessingImageData,
+  drawableToProcessingImageData,
 } from '../util';
 import {
   PreprocessorState,
@@ -31,7 +33,6 @@ import Results from './Results';
 import WorkerBridge from '../worker-bridge';
 import { resize } from 'features/processors/resize/client';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
-import { drawableToImageData } from '../util/canvas';
 
 export type OutputType = EncoderType | 'identity';
 
@@ -92,36 +93,62 @@ async function decodeImage(
   signal: AbortSignal,
   blob: Blob,
   workerBridge: WorkerBridge,
-): Promise<ImageData> {
+): Promise<ProcessingImageData> {
   assertSignal(signal);
   const mimeType = await abortable(signal, sniffMimeType(blob));
   const canDecode = await abortable(signal, canDecodeImageType(mimeType));
 
   try {
     if (!canDecode) {
+      let data: ImageData | undefined;
+
       if (mimeType === 'image/avif') {
-        return await workerBridge.avifDecode(signal, blob);
+        data = await workerBridge.avifDecode(signal, blob);
       }
       if (mimeType === 'image/webp') {
-        return await workerBridge.webpDecode(signal, blob);
+        data = await workerBridge.webpDecode(signal, blob);
       }
       if (mimeType === 'image/jxl') {
-        return await workerBridge.jxlDecode(signal, blob);
+        data = await workerBridge.jxlDecode(signal, blob);
       }
       if (mimeType === 'image/webp2') {
-        return await workerBridge.wp2Decode(signal, blob);
+        data = await workerBridge.wp2Decode(signal, blob);
       }
       if (mimeType === 'image/qoi') {
-        return await workerBridge.qoiDecode(signal, blob);
+        data = await workerBridge.qoiDecode(signal, blob);
+      }
+
+      if (data) {
+        return {
+          data,
+          sourceWidth: data.width,
+          sourceHeight: data.height,
+          downscaled: false,
+        };
       }
     }
     // Otherwise fall through and try built-in decoding for a laugh.
     return await builtinDecode(signal, blob);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err;
+    if (isImageMemoryError(err)) throw err;
     console.log(err);
     throw Error('无法解码图片');
   }
+}
+
+function isImageMemoryError(err: unknown): boolean {
+  const details =
+    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return /DataCloneError|out of memory|cannot be cloned/i.test(details);
+}
+
+function imageErrorMessage(prefix: string, err: unknown): string {
+  if (isImageMemoryError(err)) {
+    return '图片处理所需内存仍超出浏览器限制，请关闭其他页面后重试，或使用更小分辨率的图片。';
+  }
+
+  return `${prefix}：${err}`;
 }
 
 async function preprocessImage(
@@ -520,13 +547,10 @@ export default class Compress extends Component<Props, State> {
       this.setState({
         sides: cleanSet(this.state.sides, index, newRightSideSettings),
       });
-      const result = await this.props.showSnack(
-        '右侧设置已导入',
-        {
-          timeout: 3000,
-          actions: ['undo', 'dismiss'],
-        },
-      );
+      const result = await this.props.showSnack('右侧设置已导入', {
+        timeout: 3000,
+        actions: ['undo', 'dismiss'],
+      });
       if (result === 'undo') {
         this.setState({
           sides: cleanSet(this.state.sides, index, oldRightSideSettings),
@@ -691,15 +715,23 @@ export default class Compress extends Component<Props, State> {
         // Special-case SVG. We need to avoid createImageBitmap because of
         // https://bugs.chromium.org/p/chromium/issues/detail?id=606319.
         // Also, we cache the HTMLImageElement so we can perform vector resizing later.
+        let decodedResult: ProcessingImageData;
         if (mainJobState.file.type.startsWith('image/svg+xml')) {
           vectorImage = await processSvg(mainSignal, mainJobState.file);
-          decoded = drawableToImageData(vectorImage);
+          decodedResult = drawableToProcessingImageData(vectorImage);
         } else {
-          decoded = await decodeImage(
+          decodedResult = await decodeImage(
             mainSignal,
             mainJobState.file,
             // Either worker is good enough here.
             this.workerBridges[0],
+          );
+        }
+        decoded = decodedResult.data;
+
+        if (decodedResult.downscaled) {
+          this.props.showSnack(
+            `图片分辨率过大，已从 ${decodedResult.sourceWidth}×${decodedResult.sourceHeight} 自动缩小到 ${decoded.width}×${decoded.height}，以避免内存不足。`,
           );
         }
 
@@ -724,7 +756,7 @@ export default class Compress extends Component<Props, State> {
         });
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        this.props.showSnack(`源图片解码错误：${err}`);
+        this.props.showSnack(imageErrorMessage('源图片解码错误', err));
         throw err;
       }
     } else {
@@ -783,7 +815,7 @@ export default class Compress extends Component<Props, State> {
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         this.setState({ loading: false });
-        this.props.showSnack(`预处理错误：${err}`);
+        this.props.showSnack(imageErrorMessage('预处理错误', err));
         throw err;
       }
     } else {
@@ -866,7 +898,7 @@ export default class Compress extends Component<Props, State> {
               source.file.name,
               workerBridge,
             );
-            data = await decodeImage(signal, file, workerBridge);
+            data = (await decodeImage(signal, file, workerBridge)).data;
 
             this.encodeCache.add({
               data,
@@ -912,7 +944,7 @@ export default class Compress extends Component<Props, State> {
           });
           return { sides };
         });
-        this.props.showSnack(`处理错误：${err}`);
+        this.props.showSnack(imageErrorMessage('处理错误', err));
         throw err;
       }
     });

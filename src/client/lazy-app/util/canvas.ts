@@ -61,6 +61,7 @@ interface DrawableToImageDataOptions {
   sy?: number;
   sw?: number;
   sh?: number;
+  imageSmoothingQuality?: ImageSmoothingQuality;
 }
 
 export function drawableToImageData(
@@ -74,6 +75,7 @@ export function drawableToImageData(
     sy = 0,
     sw = drawable.width,
     sh = drawable.height,
+    imageSmoothingQuality,
   } = opts;
 
   // Make canvas same size as image
@@ -83,6 +85,9 @@ export function drawableToImageData(
   // Draw image onto canvas
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not create canvas context');
+  if (imageSmoothingQuality) {
+    ctx.imageSmoothingQuality = imageSmoothingQuality;
+  }
   ctx.drawImage(drawable, sx, sy, sw, sh, 0, 0, width, height);
   return ctx.getImageData(0, 0, width, height);
 }

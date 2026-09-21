@@ -12,6 +12,71 @@
  */
 import { drawableToImageData } from './canvas';
 
+export const MAX_PROCESSING_PIXELS = 12_000_000;
+
+export interface ProcessingImageData {
+  data: ImageData;
+  sourceWidth: number;
+  sourceHeight: number;
+  downscaled: boolean;
+}
+
+export interface ImageDimensions {
+  width: number;
+  height: number;
+  downscaled: boolean;
+}
+
+export function fitWithinPixelLimit(
+  width: number,
+  height: number,
+  maxPixels: number = MAX_PROCESSING_PIXELS,
+): ImageDimensions {
+  const sourceWidth = Math.max(1, Math.floor(width));
+  const sourceHeight = Math.max(1, Math.floor(height));
+  const pixelBudget = Math.max(1, Math.floor(maxPixels));
+
+  if (sourceWidth * sourceHeight <= pixelBudget) {
+    return { width: sourceWidth, height: sourceHeight, downscaled: false };
+  }
+
+  const scale = Math.sqrt(pixelBudget / (sourceWidth * sourceHeight));
+  let targetWidth = Math.max(1, Math.floor(sourceWidth * scale));
+  let targetHeight = Math.max(1, Math.floor(sourceHeight * scale));
+
+  // Clamping a very narrow dimension to 1 can put the result over budget.
+  if (targetWidth * targetHeight > pixelBudget) {
+    if (targetWidth >= targetHeight) {
+      targetWidth = Math.max(1, Math.floor(pixelBudget / targetHeight));
+    } else {
+      targetHeight = Math.max(1, Math.floor(pixelBudget / targetWidth));
+    }
+  }
+
+  return { width: targetWidth, height: targetHeight, downscaled: true };
+}
+
+export function drawableToProcessingImageData(
+  drawable: ImageBitmap | HTMLImageElement,
+): ProcessingImageData {
+  const sourceWidth =
+    'naturalWidth' in drawable ? drawable.naturalWidth : drawable.width;
+  const sourceHeight =
+    'naturalHeight' in drawable ? drawable.naturalHeight : drawable.height;
+  const dimensions = fitWithinPixelLimit(sourceWidth, sourceHeight);
+
+  return {
+    data: drawableToImageData(drawable, {
+      width: dimensions.width,
+      height: dimensions.height,
+      imageSmoothingQuality: 'high',
+    }),
+    sourceWidth,
+    sourceHeight,
+    downscaled: dimensions.downscaled,
+  };
+}
+
 /** If render engine is Safari */
 export const isSafari =
   /Safari\//.test(navigator.userAgent) &&
@@ -138,7 +203,7 @@ export async function blobToImg(blob: Blob): Promise<HTMLImageElement> {
 export async function builtinDecode(
   signal: AbortSignal,
   blob: Blob,
-): Promise<ImageData> {
+): Promise<ProcessingImageData> {
   assertSignal(signal);
 
   // Prefer createImageBitmap as it's the off-thread option for Firefox.
@@ -146,7 +211,13 @@ export async function builtinDecode(
     signal,
     'createImageBitmap' in self ? createImageBitmap(blob) : blobToImg(blob),
   );
-  return drawableToImageData(drawable);
+
+  try {
+    assertSignal(signal);
+    return drawableToProcessingImageData(drawable);
+  } finally {
+    if ('close' in drawable) drawable.close();
+  }
 }
 
 /**
