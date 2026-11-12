@@ -10,3 +10,7 @@ build
 src/features-worker/index.ts
 src/client/lazy-app/worker-bridge/meta.ts
 src/client/lazy-app/feature-meta/index.ts
+
+# Keep the vendored ONNX Runtime files byte-for-byte intact.
+src/copy/background-removal/v1/ort.wasm.min.js
+src/copy/background-removal/v1/ort-wasm-simd-threaded.mjs

@@ -1,2 +1,5 @@
 /codecs/**/*.js linguist-generated -diff
 /codecs/*/pkg*/*.d.ts linguist-generated
+
+# Preserve the checksums of bundled model/runtime assets across platforms.
+src/copy/background-removal/v1/** -text

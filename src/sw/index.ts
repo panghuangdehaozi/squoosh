@@ -1,16 +1,21 @@
 import {
   cacheOrNetwork,
+  cacheOrNetworkAndCache,
   cacheBasics,
   cacheAdditionalProcessors,
   serveShareTarget,
 } from './util';
 import { get } from 'idb-keyval';
+import {
+  backgroundRemovalAssets,
+  backgroundRemovalCache,
+} from 'worker-shared/background-removal';
 
 // Give TypeScript the correct global.
 declare var self: ServiceWorkerGlobalScope;
 
 const versionedCache = 'static-' + VERSION;
-const expectedCaches = [versionedCache];
+const expectedCaches = [versionedCache, backgroundRemovalCache];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -66,6 +71,11 @@ self.addEventListener('fetch', (event) => {
 
   // We only care about GET from here on in.
   if (event.request.method !== 'GET') return;
+
+  if (backgroundRemovalAssets.includes(url.pathname)) {
+    cacheOrNetworkAndCache(event, backgroundRemovalCache);
+    return;
+  }
 
   cacheOrNetwork(event);
 });

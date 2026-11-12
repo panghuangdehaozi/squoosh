@@ -32,6 +32,11 @@ import Results from './Results';
 import WorkerBridge from '../worker-bridge';
 import { resize } from 'features/processors/resize/client';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
+import {
+  removeBackground,
+  releaseBackgroundRemoval,
+} from '../background-removal';
+import { ensureTransparentEncoder } from '../background-removal/formats';
 
 export type OutputType = EncoderType | 'identity';
 
@@ -55,6 +60,8 @@ interface Side {
   latestSettings: SideSettings;
   encodedSettings?: SideSettings;
   loading: boolean;
+  backgroundRemovalProgress?: 'loading' | 'processing';
+  failed?: boolean;
 }
 
 interface Props {
@@ -88,6 +95,52 @@ interface LoadingFileInfo {
   filename?: string;
 }
 
+function normalizeSideSettings(settings: SideSettings): SideSettings {
+  const savedState = settings.processorState;
+  const processorState =
+    savedState?.resize && savedState.quantize && savedState.backgroundRemoval
+      ? savedState
+      : { ...defaultProcessorState, ...savedState };
+  let encoderState = settings.encoderState;
+  if (
+    encoderState &&
+    !['browserPNG', 'browserJPEG', 'webP', 'oxiPNG'].includes(encoderState.type)
+  ) {
+    encoderState = processorState.backgroundRemoval.enabled
+      ? {
+          type: 'browserPNG',
+          options: { ...encoderMap.browserPNG.meta.defaultOptions },
+        }
+      : {
+          type: 'browserJPEG',
+          options: { ...encoderMap.browserJPEG.meta.defaultOptions },
+        };
+  }
+  return {
+    ...settings,
+    processorState,
+    encoderState:
+      processorState.backgroundRemoval.enabled && encoderState
+        ? ensureTransparentEncoder(encoderState)
+        : encoderState,
+  };
+}
+
+function readSideSettings(
+  serialized: string | null,
+  fallback: SideSettings,
+): SideSettings {
+  if (!serialized) return normalizeSideSettings(fallback);
+  try {
+    return normalizeSideSettings({
+      ...fallback,
+      ...JSON.parse(serialized).latestSettings,
+    });
+  } catch {
+    return normalizeSideSettings(fallback);
+  }
+}
+
 async function preprocessImage(
   signal: AbortSignal,
   data: ImageData,
@@ -113,12 +166,20 @@ async function processImage(
   source: SourceImage,
   processorState: ProcessorState,
   workerBridge: WorkerBridge,
+  onBackgroundRemovalProgress: (phase: 'loading' | 'processing') => void,
 ): Promise<ImageData> {
   assertSignal(signal);
   let result = source.preprocessed;
 
   if (processorState.resize.enabled) {
     result = await resize(signal, source, processorState.resize, workerBridge);
+  }
+  if (processorState.backgroundRemoval.enabled) {
+    result = await removeBackground(
+      signal,
+      result,
+      onBackgroundRemovalProgress,
+    );
   }
   if (processorState.quantize.enabled) {
     result = await workerBridge.quantize(
@@ -190,33 +251,29 @@ export default class Compress extends Component<Props, State> {
     preprocessorState: defaultPreprocessorState,
     // Tasking catched side settings if available otherwise taking default settings
     sides: [
-      localStorage.getItem('leftSideSettings')
-        ? {
-            ...JSON.parse(localStorage.getItem('leftSideSettings') as string),
-            loading: false,
-          }
-        : {
-            latestSettings: {
-              processorState: defaultProcessorState,
-              encoderState: undefined,
-            },
-            loading: false,
+      {
+        latestSettings: readSideSettings(
+          localStorage.getItem('leftSideSettings'),
+          {
+            processorState: defaultProcessorState,
+            encoderState: undefined,
           },
-      localStorage.getItem('rightSideSettings')
-        ? {
-            ...JSON.parse(localStorage.getItem('rightSideSettings') as string),
-            loading: false,
-          }
-        : {
-            latestSettings: {
-              processorState: defaultProcessorState,
-              encoderState: {
-                type: 'mozJPEG',
-                options: encoderMap.mozJPEG.meta.defaultOptions,
-              },
+        ),
+        loading: false,
+      },
+      {
+        latestSettings: readSideSettings(
+          localStorage.getItem('rightSideSettings'),
+          {
+            processorState: defaultProcessorState,
+            encoderState: {
+              type: 'browserJPEG',
+              options: encoderMap.browserJPEG.meta.defaultOptions,
             },
-            loading: false,
           },
+        ),
+        loading: false,
+      },
     ],
     mobileView: this.widthQuery.matches,
   };
@@ -230,6 +287,7 @@ export default class Compress extends Component<Props, State> {
   private sideAbortControllers = [new AbortController(), new AbortController()];
   /** For debouncing calls to updateImage for each side. */
   private updateImageTimeout?: number;
+  private disposed = false;
 
   constructor(props: Props) {
     super(props);
@@ -245,16 +303,21 @@ export default class Compress extends Component<Props, State> {
   };
 
   private onEncoderTypeChange = (index: 0 | 1, newType: OutputType): void => {
+    const settings = this.state.sides[index].latestSettings;
     this.setState({
       sides: cleanSet(
         this.state.sides,
-        `${index}.latestSettings.encoderState`,
-        newType === 'identity'
-          ? undefined
-          : {
-              type: newType,
-              options: encoderMap[newType].meta.defaultOptions,
-            },
+        `${index}.latestSettings`,
+        normalizeSideSettings({
+          ...settings,
+          encoderState:
+            newType === 'identity'
+              ? undefined
+              : ({
+                  type: newType,
+                  options: encoderMap[newType].meta.defaultOptions,
+                } as EncoderState),
+        }),
       ),
     });
   };
@@ -266,8 +329,11 @@ export default class Compress extends Component<Props, State> {
     this.setState({
       sides: cleanSet(
         this.state.sides,
-        `${index}.latestSettings.processorState`,
-        options,
+        `${index}.latestSettings`,
+        normalizeSideSettings({
+          ...this.state.sides[index].latestSettings,
+          processorState: options,
+        }),
       ),
     });
   };
@@ -293,11 +359,17 @@ export default class Compress extends Component<Props, State> {
   }
 
   componentWillUnmount(): void {
+    this.disposed = true;
+    clearTimeout(this.updateImageTimeout);
     updateDocumentTitle({ loading: false });
     this.widthQuery.removeListener(this.onMobileWidthChange);
     this.mainAbortController.abort();
     for (const controller of this.sideAbortControllers) {
       controller.abort();
+    }
+    releaseBackgroundRemoval();
+    for (const side of this.state.sides) {
+      if (side.downloadUrl) URL.revokeObjectURL(side.downloadUrl);
     }
   }
 
@@ -324,6 +396,9 @@ export default class Compress extends Component<Props, State> {
     const otherIndex = index ? 0 : 1;
     const oldSettings = this.state.sides[otherIndex];
     const newSettings = { ...this.state.sides[index] };
+    this.sideAbortControllers[otherIndex].abort();
+    this.activeSideJobs[otherIndex] = undefined;
+    if (oldSettings.downloadUrl) URL.revokeObjectURL(oldSettings.downloadUrl);
 
     // Create a new object URL for the new settings. This avoids both sides sharing a URL, which
     // means it can be safely revoked without impacting the other side.
@@ -342,10 +417,23 @@ export default class Compress extends Component<Props, State> {
 
     if (result !== 'undo') return;
 
-    this.setState({
-      sides: cleanSet(this.state.sides, otherIndex, oldSettings),
-    });
+    this.restoreSide(otherIndex, oldSettings);
   };
+
+  private restoreSide(index: 0 | 1, side: Side): void {
+    if (this.disposed) return;
+    this.sideAbortControllers[index].abort();
+    this.activeSideJobs[index] = undefined;
+    const currentUrl = this.state.sides[index].downloadUrl;
+    if (currentUrl) URL.revokeObjectURL(currentUrl);
+    this.setState({
+      sides: cleanSet(this.state.sides, index, {
+        ...side,
+        downloadUrl: side.file ? URL.createObjectURL(side.file) : undefined,
+        backgroundRemovalProgress: undefined,
+      }),
+    });
+  }
   /**
    * This function saves encodedSettings and latestSettings of
    * particular side in browser local storage
@@ -398,7 +486,10 @@ export default class Compress extends Component<Props, State> {
       const oldLeftSideSettings = this.state.sides[index];
       const newLeftSideSettings = {
         ...this.state.sides[index],
-        ...JSON.parse(leftSideSettingsString),
+        latestSettings: readSideSettings(
+          leftSideSettingsString,
+          this.state.sides[index].latestSettings,
+        ),
       };
       this.setState({
         sides: cleanSet(this.state.sides, index, newLeftSideSettings),
@@ -408,9 +499,7 @@ export default class Compress extends Component<Props, State> {
         actions: ['undo', 'dismiss'],
       });
       if (result === 'undo') {
-        this.setState({
-          sides: cleanSet(this.state.sides, index, oldLeftSideSettings),
-        });
+        this.restoreSide(index, oldLeftSideSettings);
       }
       return;
     }
@@ -419,7 +508,10 @@ export default class Compress extends Component<Props, State> {
       const oldRightSideSettings = this.state.sides[index];
       const newRightSideSettings = {
         ...this.state.sides[index],
-        ...JSON.parse(rightSideSettingsString),
+        latestSettings: readSideSettings(
+          rightSideSettingsString,
+          this.state.sides[index].latestSettings,
+        ),
       };
       this.setState({
         sides: cleanSet(this.state.sides, index, newRightSideSettings),
@@ -429,9 +521,7 @@ export default class Compress extends Component<Props, State> {
         actions: ['undo', 'dismiss'],
       });
       if (result === 'undo') {
-        this.setState({
-          sides: cleanSet(this.state.sides, index, oldRightSideSettings),
-        });
+        this.restoreSide(index, oldRightSideSettings);
       }
       return;
     }
@@ -474,6 +564,7 @@ export default class Compress extends Component<Props, State> {
    * Otherwise, the thrashing causes jank, and sometimes crashes iOS Safari.
    */
   private queueUpdateImage({ immediate }: { immediate?: boolean } = {}): void {
+    if (this.disposed) return;
     // Call updateImage after this delay, unless queueUpdateImage is called
     // again, in which case the timeout is reset.
     const delay = 100;
@@ -541,6 +632,10 @@ export default class Compress extends Component<Props, State> {
         !latestSideJob.processorState ||
         // If we're going to or from 'original image' we should reprocess
         !!latestSideJob.encoderState !== !!sideJobStates[i].encoderState ||
+        (currentState.sides[i].failed &&
+          (latestSideJob.encoderState !== sideJobStates[i].encoderState ||
+            latestSideJob.processorState !==
+              sideJobStates[i].processorState)) ||
         !processorStateEquivalent(
           latestSideJob.processorState,
           sideJobStates[i].processorState,
@@ -573,6 +668,21 @@ export default class Compress extends Component<Props, State> {
     }
 
     if (!jobNeeded) return;
+
+    this.setState((state) => ({
+      sides: state.sides.map((side, index) => {
+        if (!sideWorksNeeded[index].encoding) return side;
+        if (side.downloadUrl) URL.revokeObjectURL(side.downloadUrl);
+        return {
+          ...side,
+          file: undefined,
+          downloadUrl: undefined,
+          loading: true,
+          backgroundRemovalProgress: undefined,
+          failed: false,
+        };
+      }) as [Side, Side],
+    }));
 
     const mainSignal = this.mainAbortController.signal;
     const sideSignals = this.sideAbortControllers.map((ac) => ac.signal);
@@ -704,12 +814,12 @@ export default class Compress extends Component<Props, State> {
 
     // Allow side jobs to happen in parallel
     sideWorksNeeded.forEach(async (sideWorkNeeded, sideIndex) => {
+      const signal = sideSignals[sideIndex];
+      const jobState = sideJobStates[sideIndex];
       try {
         // If processing is true, encoding is always true.
         if (!sideWorkNeeded.encoding) return;
 
-        const signal = sideSignals[sideIndex];
-        const jobState = sideJobStates[sideIndex];
         const workerBridge = this.workerBridges[sideIndex];
         let file: File;
         let data: ImageData;
@@ -745,6 +855,16 @@ export default class Compress extends Component<Props, State> {
                 source,
                 jobState.processorState,
                 workerBridge,
+                (phase) => {
+                  this.setState((state) => {
+                    if (signal.aborted) return {};
+                    return {
+                      sides: cleanMerge(state.sides, sideIndex, {
+                        backgroundRemovalProgress: phase,
+                      }),
+                    };
+                  });
+                },
               );
 
               // Update state for process completion, including intermediate render
@@ -754,6 +874,7 @@ export default class Compress extends Component<Props, State> {
                 const side: Side = {
                   ...currentSide,
                   processed,
+                  backgroundRemovalProgress: undefined,
                   // Intermediate render
                   data: processed,
                   encodedSettings: {
@@ -802,6 +923,8 @@ export default class Compress extends Component<Props, State> {
             file,
             downloadUrl: URL.createObjectURL(file),
             loading: false,
+            backgroundRemovalProgress: undefined,
+            failed: false,
             processed,
             encodedSettings: {
               processorState: jobState.processorState,
@@ -814,15 +937,38 @@ export default class Compress extends Component<Props, State> {
 
         this.activeSideJobs[sideIndex] = undefined;
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
+        if (signal.aborted) return;
         this.setState((currentState) => {
+          if (signal.aborted) return {};
+          const currentSide = currentState.sides[sideIndex];
+          if (currentSide.downloadUrl) {
+            URL.revokeObjectURL(currentSide.downloadUrl);
+          }
           const sides = cleanMerge(currentState.sides, sideIndex, {
             loading: false,
+            file: undefined,
+            downloadUrl: undefined,
+            backgroundRemovalProgress: undefined,
+            processed: undefined,
+            failed: true,
           });
           return { sides };
         });
-        this.props.showSnack(imageErrorMessage('处理错误', err));
-        throw err;
+        console.error(err);
+        const action = await this.props.showSnack('图片处理失败，请重试。', {
+          actions: ['重试', 'dismiss'],
+        });
+        if (action !== '重试' || signal.aborted) return;
+        this.activeSideJobs[sideIndex] = undefined;
+        this.setState(
+          (state) => ({
+            sides: cleanMerge(state.sides, sideIndex, {
+              encodedSettings: undefined,
+              processed: undefined,
+            }),
+          }),
+          () => this.queueUpdateImage({ immediate: true }),
+        );
       }
     });
   }
@@ -841,6 +987,7 @@ export default class Compress extends Component<Props, State> {
         mobileView={mobileView}
         processorState={side.latestSettings.processorState}
         encoderState={side.latestSettings.encoderState}
+        backgroundRemovalProgress={side.backgroundRemovalProgress}
         onEncoderTypeChange={this.onEncoderTypeChange}
         onEncoderOptionsChange={this.onEncoderOptionsChange}
         onProcessorOptionsChange={this.onProcessorOptionsChange}

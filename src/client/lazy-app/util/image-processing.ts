@@ -12,6 +12,16 @@ import type { ImageMimeTypes, ProcessingImageData } from './index';
 import { encoderMap } from '../feature-meta';
 import type { EncoderState } from '../feature-meta';
 import type WorkerBridge from '../worker-bridge';
+import { defaultOptions as defaultResizeOptions } from 'features/processors/resize/shared/meta';
+import type { WorkerResizeOptions } from 'features/processors/resize/shared/meta';
+import {
+  defaultBatchResizeOptions,
+  getBatchResizeDimensions,
+  isValidBatchResize,
+} from '../Batch/resize';
+import type { BatchResizeOptions } from '../Batch/resize';
+import { removeBackground } from '../background-removal';
+import { ensureTransparentEncoder } from '../background-removal/formats';
 
 export async function decodeImage(
   signal: AbortSignal,
@@ -142,15 +152,52 @@ export async function compressFile(
   file: File,
   encoderState: EncoderState,
   bridge: WorkerBridge,
-): Promise<{ file: File; warning?: string }> {
+  resizeOptions: BatchResizeOptions = defaultBatchResizeOptions,
+  backgroundRemoval: boolean = false,
+  onProgress?: (phase: 'loading' | 'processing') => void,
+): Promise<{ file: File; warning?: string; width: number; height: number }> {
   assertSignal(signal);
+  if (!isValidBatchResize(resizeOptions)) {
+    throw new Error('调整尺寸参数无效');
+  }
   const decoded = file.type.startsWith('image/svg+xml')
     ? drawableToProcessingImageData(await processSvg(signal, file))
     : await decodeImage(signal, file, bridge);
+  let image = decoded.data;
+
+  if (resizeOptions.enabled) {
+    const target = getBatchResizeDimensions(
+      decoded.sourceWidth,
+      decoded.sourceHeight,
+      resizeOptions,
+    );
+    const scale = Math.min(
+      1,
+      image.width / target.width,
+      image.height / target.height,
+    );
+    const width = Math.max(1, Math.floor(target.width * scale));
+    const height = Math.max(1, Math.floor(target.height * scale));
+
+    if (width !== image.width || height !== image.height) {
+      image = await bridge.resize(signal, image, {
+        ...(defaultResizeOptions as WorkerResizeOptions),
+        width,
+        height,
+        method: 'lanczos3',
+        fitMethod: 'stretch',
+      });
+    }
+  }
+
+  if (backgroundRemoval) {
+    image = await removeBackground(signal, image, onProgress);
+  }
+
   const output = await compressImage(
     signal,
-    decoded.data,
-    encoderState,
+    image,
+    backgroundRemoval ? ensureTransparentEncoder(encoderState) : encoderState,
     file.name,
     bridge,
   );
@@ -158,6 +205,8 @@ export async function compressFile(
 
   return {
     file: output,
+    width: image.width,
+    height: image.height,
     warning: decoded.downscaled
       ? `图片分辨率过大，已从 ${decoded.sourceWidth}×${decoded.sourceHeight} 自动缩小到 ${decoded.data.width}×${decoded.data.height}，以避免内存不足。`
       : undefined,

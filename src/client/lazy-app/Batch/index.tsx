@@ -9,9 +9,19 @@ import {
 } from '../feature-meta';
 import { compressFile, imageErrorMessage } from '../util/image-processing';
 import { assertSignal } from '../util';
+import { releaseBackgroundRemoval } from '../background-removal';
+import {
+  ensureTransparentEncoder,
+  supportsTransparency,
+} from '../background-removal/formats';
 import WorkerBridge from '../worker-bridge';
 import prettyBytes from '../Compress/Results/pretty-bytes';
 import { createZip } from './zip';
+import {
+  BatchResizeOptions,
+  defaultBatchResizeOptions,
+  isValidBatchResize,
+} from './resize';
 import * as style from './style.css';
 import 'add-css:./style.css';
 import 'add-css:../Compress/Options/style.css';
@@ -31,11 +41,16 @@ interface Item {
   url?: string;
   error?: string;
   warning?: string;
+  width?: number;
+  height?: number;
+  backgroundPhase?: 'loading' | 'processing';
 }
 
 interface State {
   items: Item[];
   encoder: EncoderState;
+  resize: BatchResizeOptions;
+  backgroundRemoval: boolean;
   supportedTypes: EncoderType[];
   running: boolean;
   packing: boolean;
@@ -73,10 +88,12 @@ export default class Batch extends Component<Props, State> {
     this.state = {
       items: this.makeItems(props.files),
       encoder: {
-        type: 'mozJPEG',
-        options: { ...encoderMap.mozJPEG.meta.defaultOptions },
+        type: 'browserJPEG',
+        options: { ...encoderMap.browserJPEG.meta.defaultOptions },
       },
-      supportedTypes: [],
+      resize: { ...defaultBatchResizeOptions },
+      backgroundRemoval: false,
+      supportedTypes: Object.keys(encoderMap) as EncoderType[],
       running: false,
       packing: false,
     };
@@ -84,30 +101,13 @@ export default class Batch extends Component<Props, State> {
 
   componentDidMount() {
     this.mounted = true;
-    Promise.all(
-      (Object.keys(encoderMap) as EncoderType[]).map(async (type) => {
-        const encoder = encoderMap[type];
-        try {
-          return !('featureTest' in encoder) || (await encoder.featureTest())
-            ? type
-            : undefined;
-        } catch {
-          return undefined;
-        }
-      }),
-    ).then((types) => {
-      if (this.mounted) {
-        this.setState({
-          supportedTypes: types.filter((type): type is EncoderType => !!type),
-        });
-      }
-    });
   }
 
   componentWillUnmount() {
     this.mounted = false;
     this.controller?.abort();
     this.zipController?.abort();
+    releaseBackgroundRemoval();
     this.releaseUrls();
   }
 
@@ -164,11 +164,17 @@ export default class Batch extends Component<Props, State> {
     );
   };
 
-  private changeEncoder(encoder: EncoderState) {
+  private changeSettings(
+    encoder: EncoderState,
+    resize: BatchResizeOptions = this.state.resize,
+    backgroundRemoval: boolean = this.state.backgroundRemoval,
+  ) {
     if (this.controller || this.zipController) return;
     this.releaseUrls();
     this.setState((state) => ({
-      encoder,
+      encoder: backgroundRemoval ? ensureTransparentEncoder(encoder) : encoder,
+      resize,
+      backgroundRemoval,
       items: state.items.map(({ id, source }) => ({
         id,
         source,
@@ -180,14 +186,45 @@ export default class Batch extends Component<Props, State> {
   private onTypeChange = (event: Event) => {
     const type = (event.currentTarget as HTMLSelectElement)
       .value as EncoderType;
-    this.changeEncoder({
+    this.changeSettings({
       type,
       options: { ...encoderMap[type].meta.defaultOptions },
     } as EncoderState);
   };
 
   private onOptionsChange = (options: EncoderOptions) => {
-    this.changeEncoder({ ...this.state.encoder, options } as EncoderState);
+    this.changeSettings({ ...this.state.encoder, options } as EncoderState);
+  };
+
+  private onResizeEnabledChange = (event: Event) => {
+    this.changeSettings(this.state.encoder, {
+      ...this.state.resize,
+      enabled: (event.currentTarget as HTMLInputElement).checked,
+    });
+  };
+
+  private onBackgroundRemovalChange = (event: Event) => {
+    if (this.controller || this.zipController) return;
+    const enabled = (event.currentTarget as HTMLInputElement).checked;
+    this.changeSettings(this.state.encoder, this.state.resize, enabled);
+    if (!enabled) releaseBackgroundRemoval();
+  };
+
+  private onResizeModeChange = (event: Event) => {
+    this.changeSettings(this.state.encoder, {
+      ...this.state.resize,
+      mode: (event.currentTarget as HTMLSelectElement)
+        .value as BatchResizeOptions['mode'],
+    });
+  };
+
+  private onResizeInput = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const key = input.name as 'width' | 'height' | 'percent';
+    this.changeSettings(this.state.encoder, {
+      ...this.state.resize,
+      [key]: input.valueAsNumber,
+    });
   };
 
   private updateItem(id: number, changes: Partial<Item>) {
@@ -200,13 +237,20 @@ export default class Batch extends Component<Props, State> {
   }
 
   private start = async () => {
-    if (this.controller || this.zipController) return;
+    if (
+      this.controller ||
+      this.zipController ||
+      !isValidBatchResize(this.state.resize)
+    )
+      return;
     const jobs = this.state.items.filter((item) => item.status !== 'done');
     if (!jobs.length) return;
     const controller = new AbortController();
     this.controller = controller;
     const { signal } = controller;
     const encoder = this.state.encoder;
+    const resize = this.state.resize;
+    const backgroundRemoval = this.state.backgroundRemoval;
     this.setState((state) => ({
       running: true,
       items: state.items.map((item) =>
@@ -220,13 +264,22 @@ export default class Batch extends Component<Props, State> {
       // Process one image at a time so decoded pixels are not retained for the whole batch.
       for (const item of jobs) {
         if (signal.aborted) break;
-        this.updateItem(item.id, { status: 'processing' });
+        this.updateItem(item.id, {
+          status: 'processing',
+          backgroundPhase: undefined,
+        });
         try {
-          const { file, warning } = await compressFile(
+          const { file, warning, width, height } = await compressFile(
             signal,
             item.source,
             encoder,
             this.worker,
+            resize,
+            backgroundRemoval,
+            (backgroundPhase) => {
+              if (!signal.aborted)
+                this.updateItem(item.id, { backgroundPhase });
+            },
           );
           assertSignal(signal);
           const url = URL.createObjectURL(file);
@@ -236,13 +289,17 @@ export default class Batch extends Component<Props, State> {
             result: file,
             url,
             warning,
+            width,
+            height,
             error: undefined,
+            backgroundPhase: undefined,
           });
         } catch (error) {
           if (signal.aborted) break;
           this.updateItem(item.id, {
             status: 'error',
             error: imageErrorMessage('压缩失败', error),
+            backgroundPhase: undefined,
           });
         }
       }
@@ -253,7 +310,7 @@ export default class Batch extends Component<Props, State> {
           running: false,
           items: state.items.map((item) =>
             item.status === 'processing'
-              ? { ...item, status: 'pending' }
+              ? { ...item, status: 'pending', backgroundPhase: undefined }
               : item,
           ),
         }));
@@ -263,12 +320,13 @@ export default class Batch extends Component<Props, State> {
 
   private stop = () => {
     this.controller?.abort();
+    releaseBackgroundRemoval();
   };
 
   private downloadZip = async () => {
     if (this.controller || this.zipController) return;
     const files = this.state.items.flatMap((item) =>
-      item.result ? [item.result] : [],
+      item.status === 'done' && item.result ? [item.result] : [],
     );
     if (!files.length) return;
     const controller = new AbortController();
@@ -301,7 +359,15 @@ export default class Batch extends Component<Props, State> {
 
   render(
     { onBack }: Props,
-    { items, encoder, supportedTypes, running, packing }: State,
+    {
+      items,
+      encoder,
+      resize,
+      backgroundRemoval,
+      supportedTypes,
+      running,
+      packing,
+    }: State,
   ) {
     const done = items.filter((item) => item.status === 'done');
     const failed = items.filter((item) => item.status === 'error').length;
@@ -313,6 +379,16 @@ export default class Batch extends Component<Props, State> {
     const EncoderOptionsComponent =
       'Options' in codec ? codec.Options : undefined;
     const busy = running || packing;
+    const resizeValid = isValidBatchResize(resize);
+    const availableTypes = backgroundRemoval
+      ? supportedTypes.filter(supportsTransparency)
+      : supportedTypes;
+    const currentAction =
+      current?.backgroundPhase === 'loading'
+        ? '准备去背景'
+        : current?.backgroundPhase === 'processing'
+        ? '去背景中'
+        : '正在压缩';
 
     return (
       <main class={style.batch}>
@@ -383,6 +459,9 @@ export default class Batch extends Component<Props, State> {
                               <small class={style.note}>
                                 {sizeChange(item.source.size, item.result.size)}
                               </small>
+                              <small class={style.note}>
+                                {item.width} × {item.height} px
+                              </small>
                             </span>
                           ) : (
                             '—'
@@ -398,7 +477,12 @@ export default class Batch extends Component<Props, State> {
                                 : ''
                             }
                           >
-                            {statusLabels[item.status]}
+                            {item.status === 'processing' &&
+                            item.backgroundPhase
+                              ? item.backgroundPhase === 'loading'
+                                ? '准备去背景…'
+                                : '去背景中…'
+                              : statusLabels[item.status]}
                           </span>
                         </td>
                         <td>
@@ -448,32 +532,136 @@ export default class Batch extends Component<Props, State> {
           </section>
           <aside class={style.settings} aria-label="统一压缩参数">
             <h2>统一压缩参数</h2>
-            <fieldset disabled={busy} class={style.fields}>
-              <label class={style.formatLabel}>
-                输出格式
-                <select
-                  value={encoder.type}
-                  onChange={this.onTypeChange}
-                  disabled={!supportedTypes.length}
-                >
-                  {(supportedTypes.length
-                    ? supportedTypes
-                    : (['mozJPEG'] as EncoderType[])
-                  ).map((type) => (
-                    <option key={type} value={type}>
-                      {encoderMap[type].meta.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {EncoderOptionsComponent && (
-                <EncoderOptionsComponent
-                  key={encoder.type}
-                  options={encoder.options as any}
-                  onChange={this.onOptionsChange}
-                />
-              )}
-            </fieldset>
+            <div class={style.settingsScroller}>
+              <fieldset disabled={busy} class={style.fields}>
+                <div class={style.resizeSection}>
+                  <label class={style.resizeToggle}>
+                    去除背景
+                    <input
+                      type="checkbox"
+                      checked={backgroundRemoval}
+                      onChange={this.onBackgroundRemovalChange}
+                    />
+                  </label>
+                </div>
+                <div class={style.resizeSection}>
+                  <label class={style.resizeToggle}>
+                    调整尺寸
+                    <input
+                      type="checkbox"
+                      checked={resize.enabled}
+                      onChange={this.onResizeEnabledChange}
+                    />
+                  </label>
+                  {resize.enabled && (
+                    <div class={style.resizeOptions}>
+                      <label>
+                        调整方式
+                        <select
+                          value={resize.mode}
+                          onChange={this.onResizeModeChange}
+                        >
+                          <option value="bounds">限制最大宽高</option>
+                          <option value="percent">按比例缩放</option>
+                        </select>
+                      </label>
+                      {resize.mode === 'bounds' ? (
+                        <div class={style.dimensions}>
+                          <label>
+                            最大宽度（px）
+                            <input
+                              type="number"
+                              name="width"
+                              min="1"
+                              max="32768"
+                              step="1"
+                              required
+                              value={
+                                Number.isFinite(resize.width)
+                                  ? resize.width
+                                  : ''
+                              }
+                              onInput={this.onResizeInput}
+                            />
+                          </label>
+                          <label>
+                            最大高度（px）
+                            <input
+                              type="number"
+                              name="height"
+                              min="1"
+                              max="32768"
+                              step="1"
+                              required
+                              value={
+                                Number.isFinite(resize.height)
+                                  ? resize.height
+                                  : ''
+                              }
+                              onInput={this.onResizeInput}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <label>
+                          缩放比例（%）
+                          <input
+                            type="number"
+                            name="percent"
+                            min="1"
+                            max="100"
+                            step="1"
+                            required
+                            value={
+                              Number.isFinite(resize.percent)
+                                ? resize.percent
+                                : ''
+                            }
+                            onInput={this.onResizeInput}
+                          />
+                        </label>
+                      )}
+                      <p class={style.resizeHint}>
+                        {resize.mode === 'bounds'
+                          ? '保持宽高比，不放大小图。'
+                          : '按每张原图的尺寸等比缩小。'}
+                      </p>
+                      {!resizeValid && (
+                        <p class={style.resizeError} role="alert">
+                          {resize.mode === 'bounds'
+                            ? '宽高请输入 1–32768 的整数。'
+                            : '比例请输入 1–100 的整数。'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <label class={style.formatLabel}>
+                  输出格式
+                  <select
+                    value={encoder.type}
+                    onChange={this.onTypeChange}
+                    disabled={!availableTypes.length}
+                  >
+                    {(availableTypes.length
+                      ? availableTypes
+                      : [encoder.type]
+                    ).map((type) => (
+                      <option key={type} value={type}>
+                        {encoderMap[type].meta.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {EncoderOptionsComponent && (
+                  <EncoderOptionsComponent
+                    key={encoder.type}
+                    options={encoder.options as any}
+                    onChange={this.onOptionsChange}
+                  />
+                )}
+              </fieldset>
+            </div>
             <div class={style.actions}>
               <progress
                 value={done.length + failed}
@@ -484,7 +672,7 @@ export default class Batch extends Component<Props, State> {
                 {packing
                   ? '正在打包…'
                   : current
-                  ? `正在压缩：${current.source.name}`
+                  ? `${currentAction}：${current.source.name}`
                   : !items.length
                   ? '添加图片后开始压缩'
                   : pending
@@ -498,7 +686,12 @@ export default class Batch extends Component<Props, State> {
               ) : (
                 <button
                   class={style.primary}
-                  disabled={packing || !pending || !supportedTypes.length}
+                  disabled={
+                    packing ||
+                    !pending ||
+                    !availableTypes.length ||
+                    !resizeValid
+                  }
                   onClick={this.start}
                 >
                   {failed && pending === failed ? '重试失败项' : '开始压缩'}

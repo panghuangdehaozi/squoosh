@@ -1,0 +1,39 @@
+Background removal assets, version 1
+
+ONNX Runtime Web 1.20.1
+Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+The three runtime files are unmodified files from onnxruntime-web@1.20.1:
+  ort.wasm.min.js
+  ort-wasm-simd-threaded.mjs
+  ort-wasm-simd-threaded.wasm
+Package: https://www.npmjs.com/package/onnxruntime-web/v/1.20.1
+Source: https://github.com/microsoft/onnxruntime/tree/v1.20.1
+License: LICENSE-onnxruntime.txt
+Additional notices: ThirdPartyNotices-onnxruntime.txt
+
+U2-Netp model
+Authors: Xuebin Qin, Zichen Zhang, Chenyang Huang, Masood Dehghan,
+Osmar R. Zaiane, and Martin Jagersand.
+Paper: U2-Net: Going Deeper with Nested U-Structure for Salient Object Detection.
+Source: https://github.com/xuebinqin/U-2-Net
+License: Apache-2.0; see LICENSE-u2net.txt.
+The author confirms the released code and models share this license and notes
+that the training datasets have their own licenses:
+  https://github.com/xuebinqin/U-2-Net/issues/208
+
+The unmodified ONNX export is distributed by rembg:
+  https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx
+Upstream MD5: 8e83ca70e441ab06c318d82300c84806
+SHA-256: 309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8
+Size: 4574861 bytes
+
+The worker's normalization and mask processing follow rembg's U2netpSession
+and BaseSession, adapted to browser ImageData, Canvas resizing, alpha
+preservation, serial requests, and finite-value guards.
+Copyright (c) 2020 Daniel Gatis. Licensed under the MIT License.
+Source: https://github.com/danielgatis/rembg
+License: LICENSE-rembg.txt
+
+Exact download URLs, byte sizes, and SHA-256 hashes of the bundled third-party
+files are recorded in assets.json. Files in this versioned directory must be
+published together; runtime JavaScript and WASM versions must not be mixed.

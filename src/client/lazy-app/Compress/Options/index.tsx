@@ -8,6 +8,7 @@ import type { SourceImage, OutputType } from '..';
 import {
   EncoderOptions,
   EncoderState,
+  EncoderType,
   ProcessorState,
   ProcessorOptions,
   encoderMap,
@@ -18,6 +19,7 @@ import Select from './Select';
 import { Options as QuantOptionsComponent } from 'features/processors/quantize/client';
 import { Options as ResizeOptionsComponent } from 'features/processors/resize/client';
 import { ImportIcon, SaveIcon, SwapIcon } from 'client/lazy-app/icons';
+import { supportsTransparency } from '../../background-removal/formats';
 
 interface Props {
   index: 0 | 1;
@@ -25,6 +27,7 @@ interface Props {
   source?: SourceImage;
   encoderState?: EncoderState;
   processorState: ProcessorState;
+  backgroundRemovalProgress?: 'loading' | 'processing';
   onEncoderTypeChange(index: 0 | 1, newType: OutputType): void;
   onEncoderOptionsChange(index: 0 | 1, newOptions: EncoderOptions): void;
   onProcessorOptionsChange(index: 0 | 1, newOptions: ProcessorState): void;
@@ -34,46 +37,17 @@ interface Props {
 }
 
 interface State {
-  supportedEncoderMap?: PartialButNotUndefined<typeof encoderMap>;
+  supportedEncoderMap: typeof encoderMap;
   leftSideSettings?: string | null;
   rightSideSettings?: string | null;
 }
 
-type PartialButNotUndefined<T> = {
-  [P in keyof T]: T[P];
-};
-
-const supportedEncoderMapP: Promise<PartialButNotUndefined<typeof encoderMap>> =
-  (async () => {
-    const supportedEncoderMap: PartialButNotUndefined<typeof encoderMap> = {
-      ...encoderMap,
-    };
-
-    // Filter out entries where the feature test fails
-    await Promise.all(
-      Object.entries(encoderMap).map(async ([encoderName, details]) => {
-        if ('featureTest' in details && !(await details.featureTest())) {
-          delete supportedEncoderMap[encoderName as keyof typeof encoderMap];
-        }
-      }),
-    );
-
-    return supportedEncoderMap;
-  })();
-
 export default class Options extends Component<Props, State> {
   state: State = {
-    supportedEncoderMap: undefined,
+    supportedEncoderMap: encoderMap,
     leftSideSettings: localStorage.getItem('leftSideSettings'),
     rightSideSettings: localStorage.getItem('rightSideSettings'),
   };
-
-  constructor() {
-    super();
-    supportedEncoderMapP.then((supportedEncoderMap) =>
-      this.setState({ supportedEncoderMap }),
-    );
-  }
 
   private setLeftSideSettings = () => {
     this.setState({
@@ -148,7 +122,7 @@ export default class Options extends Component<Props, State> {
   };
 
   render(
-    { source, encoderState, processorState }: Props,
+    { source, encoderState, processorState, backgroundRemovalProgress }: Props,
     { supportedEncoderMap }: State,
   ) {
     const encoder = encoderState && encoderMap[encoderState.type];
@@ -229,6 +203,22 @@ export default class Options extends Component<Props, State> {
               </Expander>
 
               <label class={style.sectionEnabler}>
+                去除背景
+                <Toggle
+                  name="backgroundRemoval.enable"
+                  checked={processorState.backgroundRemoval.enabled}
+                  onChange={this.onProcessorEnabledChange}
+                />
+              </label>
+              {backgroundRemovalProgress && (
+                <div class={style.optionOneCell} role="status">
+                  {backgroundRemovalProgress === 'loading'
+                    ? '正在准备去背景…'
+                    : '正在去除背景…'}
+                </div>
+              )}
+
+              <label class={style.sectionEnabler}>
                 减少调色板
                 <Toggle
                   name="quantize.enable"
@@ -260,9 +250,15 @@ export default class Options extends Component<Props, State> {
               <option value="identity">{`原始图片 ${
                 this.props.source ? `(${this.props.source.file.name})` : ''
               }`}</option>
-              {Object.entries(supportedEncoderMap).map(([type, encoder]) => (
-                <option value={type}>{encoder.meta.label}</option>
-              ))}
+              {Object.entries(supportedEncoderMap)
+                .filter(
+                  ([type]) =>
+                    !processorState.backgroundRemoval.enabled ||
+                    supportsTransparency(type as EncoderType),
+                )
+                .map(([type, encoder]) => (
+                  <option value={type}>{encoder.meta.label}</option>
+                ))}
             </Select>
           ) : (
             <Select large>

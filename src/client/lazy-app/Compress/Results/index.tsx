@@ -44,7 +44,15 @@ export default class Results extends Component<Props, State> {
     }
   }
 
-  private onDownload = () => {
+  private onDownload = (event: Event) => {
+    if (
+      !this.props.imageFile ||
+      !this.props.downloadUrl ||
+      this.props.loading
+    ) {
+      event.preventDefault();
+      return;
+    }
     // GA can’t do floats. So we round to ints. We're deliberately rounding to nearest kilobyte to
     // avoid cases where exact image sizes leak something interesting about the user.
     const before = Math.round(this.props.source!.file.size / 1024);
@@ -59,10 +67,11 @@ export default class Results extends Component<Props, State> {
   };
 
   render(
-    { source, imageFile, downloadUrl, flipSide, typeLabel }: Props,
+    { source, imageFile, downloadUrl, flipSide, typeLabel, loading }: Props,
     { showLoadingState }: State,
   ) {
     const prettySize = imageFile && prettyBytes(imageFile.size);
+    const canDownload = !!imageFile && !!downloadUrl && !loading;
     const isOriginal = !source || !imageFile || source.file === imageFile;
     let diff;
     let percent;
@@ -120,8 +129,10 @@ export default class Results extends Component<Props, State> {
           </div>
         </div>
         <a
-          class={showLoadingState ? style.downloadDisable : style.download}
-          href={downloadUrl}
+          class={canDownload ? style.download : style.downloadDisable}
+          href={canDownload ? downloadUrl : undefined}
+          aria-disabled={!canDownload}
+          tabIndex={canDownload ? 0 : -1}
           download={imageFile ? imageFile.name : ''}
           title="下载"
           onClick={this.onDownload}

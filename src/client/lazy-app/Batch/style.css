@@ -96,6 +96,10 @@
   outline: 2px solid var(--pink);
   outline-offset: 3px;
 }
+.batch input:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+}
 .table-scroll {
   overflow-x: auto;
   touch-action: pan-x pan-y;
@@ -217,6 +221,62 @@
     border-radius: 4px;
   }
 }
+.resize-section {
+  padding: 20px;
+  border-bottom: 1px solid #444;
+}
+.resize-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  cursor: pointer;
+  input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--pink);
+  }
+}
+.resize-options {
+  display: grid;
+  gap: 16px;
+  padding-top: 20px;
+  label {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+  input,
+  select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 10px;
+    font: inherit;
+    color: var(--white);
+    background: var(--dark-gray);
+    border: 1px solid #666;
+    border-radius: 4px;
+  }
+}
+.dimensions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.resize-hint,
+.resize-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.resize-hint {
+  color: #ccc;
+}
+.resize-error {
+  color: #ff9cba;
+}
 .actions {
   display: grid;
   gap: 12px;
@@ -244,6 +304,43 @@
   background: transparent;
   color: var(--white);
   border-color: #777;
+}
+
+@media (min-width: 701px) {
+  .batch {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .workspace {
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .queue {
+    min-height: 0;
+    max-height: 100%;
+    box-sizing: border-box;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .settings {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    box-sizing: border-box;
+  }
+  .settings h2,
+  .actions {
+    flex-shrink: 0;
+  }
+  .settings-scroller {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 @media (max-width: 900px) {

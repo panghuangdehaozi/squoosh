@@ -27,13 +27,23 @@ export function cacheOrNetworkAndCache(
 
       // Else go to the network.
       const response = await fetch(request);
+      if (
+        !response.ok ||
+        response.headers.get('content-type')?.includes('text/html')
+      ) {
+        return response;
+      }
       const responseToCache = response.clone();
 
       event.waitUntil(
         (async function () {
           // Cache what we fetched.
-          const cache = await caches.open(cacheName);
-          await cache.put(request, responseToCache);
+          try {
+            const cache = await caches.open(cacheName);
+            await cache.put(request, responseToCache);
+          } catch {
+            // Serving the response must still work when storage is unavailable.
+          }
         })(),
       );
 
