@@ -68,7 +68,7 @@
   width: 100vw;
   height: var(--size);
   display: grid;
-  grid-template-rows: max-content max-content;
+  grid-template-rows: repeat(3, max-content);
   justify-items: center;
   align-content: center;
   gap: 0.7rem;
@@ -95,6 +95,26 @@
   text-decoration: underline;
   font: inherit;
   color: inherit;
+}
+
+.batch-btn {
+  composes: unbutton from global;
+  margin-top: 0.6rem;
+  padding: 0.55em 1.2em;
+  border: 1px solid currentColor;
+  border-radius: 0.4em;
+  color: inherit;
+  font: inherit;
+  font-style: normal;
+
+  &:hover {
+    background: #fff2;
+  }
+
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
 }
 
 .top-wave {

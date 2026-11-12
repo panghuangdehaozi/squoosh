@@ -3,17 +3,16 @@ import { h, Component } from 'preact';
 import * as style from './style.css';
 import 'add-css:./style.css';
 import {
-  blobToImg,
-  blobToText,
-  builtinDecode,
-  sniffMimeType,
-  canDecodeImageType,
-  abortable,
   assertSignal,
-  ImageMimeTypes,
   ProcessingImageData,
   drawableToProcessingImageData,
 } from '../util';
+import {
+  decodeImage,
+  compressImage,
+  processSvg,
+  imageErrorMessage,
+} from '../util/image-processing';
 import {
   PreprocessorState,
   ProcessorState,
@@ -89,68 +88,6 @@ interface LoadingFileInfo {
   filename?: string;
 }
 
-async function decodeImage(
-  signal: AbortSignal,
-  blob: Blob,
-  workerBridge: WorkerBridge,
-): Promise<ProcessingImageData> {
-  assertSignal(signal);
-  const mimeType = await abortable(signal, sniffMimeType(blob));
-  const canDecode = await abortable(signal, canDecodeImageType(mimeType));
-
-  try {
-    if (!canDecode) {
-      let data: ImageData | undefined;
-
-      if (mimeType === 'image/avif') {
-        data = await workerBridge.avifDecode(signal, blob);
-      }
-      if (mimeType === 'image/webp') {
-        data = await workerBridge.webpDecode(signal, blob);
-      }
-      if (mimeType === 'image/jxl') {
-        data = await workerBridge.jxlDecode(signal, blob);
-      }
-      if (mimeType === 'image/webp2') {
-        data = await workerBridge.wp2Decode(signal, blob);
-      }
-      if (mimeType === 'image/qoi') {
-        data = await workerBridge.qoiDecode(signal, blob);
-      }
-
-      if (data) {
-        return {
-          data,
-          sourceWidth: data.width,
-          sourceHeight: data.height,
-          downscaled: false,
-        };
-      }
-    }
-    // Otherwise fall through and try built-in decoding for a laugh.
-    return await builtinDecode(signal, blob);
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') throw err;
-    if (isImageMemoryError(err)) throw err;
-    console.log(err);
-    throw Error('无法解码图片');
-  }
-}
-
-function isImageMemoryError(err: unknown): boolean {
-  const details =
-    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  return /DataCloneError|out of memory|cannot be cloned/i.test(details);
-}
-
-function imageErrorMessage(prefix: string, err: unknown): string {
-  if (isImageMemoryError(err)) {
-    return '图片处理所需内存仍超出浏览器限制，请关闭其他页面后重试，或使用更小分辨率的图片。';
-  }
-
-  return `${prefix}：${err}`;
-}
-
 async function preprocessImage(
   signal: AbortSignal,
   data: ImageData,
@@ -193,34 +130,6 @@ async function processImage(
   return result;
 }
 
-async function compressImage(
-  signal: AbortSignal,
-  image: ImageData,
-  encodeData: EncoderState,
-  sourceFilename: string,
-  workerBridge: WorkerBridge,
-): Promise<File> {
-  assertSignal(signal);
-
-  const encoder = encoderMap[encodeData.type];
-  const compressedData = await encoder.encode(
-    signal,
-    workerBridge,
-    image,
-    // The type of encodeData.options is enforced via the previous line
-    encodeData.options as any,
-  );
-
-  // This type ensures the image mimetype is consistent with our mimetype sniffer
-  const type: ImageMimeTypes = encoder.meta.mimeType;
-
-  return new File(
-    [compressedData],
-    sourceFilename.replace(/.[^.]*$/, `.${encoder.meta.extension}`),
-    { type },
-  );
-}
-
 function stateForNewSourceData(state: State): State {
   let newState = { ...state };
 
@@ -239,38 +148,6 @@ function stateForNewSourceData(state: State): State {
   }
 
   return newState;
-}
-
-async function processSvg(
-  signal: AbortSignal,
-  blob: Blob,
-): Promise<HTMLImageElement> {
-  assertSignal(signal);
-  // Firefox throws if you try to draw an SVG to canvas that doesn't have width/height.
-  // In Chrome it loads, but drawImage behaves weirdly.
-  // This function sets width/height if it isn't already set.
-  const parser = new DOMParser();
-  const text = await abortable(signal, blobToText(blob));
-  const document = parser.parseFromString(text, 'image/svg+xml');
-  const svg = document.documentElement!;
-
-  if (svg.hasAttribute('width') && svg.hasAttribute('height')) {
-    return blobToImg(blob);
-  }
-
-  const viewBox = svg.getAttribute('viewBox');
-  if (viewBox === null) throw Error('SVG 必须包含 width/height 或 viewBox');
-
-  const viewboxParts = viewBox.split(/\s+/);
-  svg.setAttribute('width', viewboxParts[2]);
-  svg.setAttribute('height', viewboxParts[3]);
-
-  const serializer = new XMLSerializer();
-  const newSource = serializer.serializeToString(document);
-  return abortable(
-    signal,
-    blobToImg(new Blob([newSource], { type: 'image/svg+xml' })),
-  );
 }
 
 /**

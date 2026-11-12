@@ -1,0 +1,273 @@
+.batch {
+  --main-theme-color: var(--pink);
+  --header-text-color: var(--white);
+  --horizontal-padding: 20px;
+  height: 100%;
+  overflow: auto;
+  touch-action: pan-y;
+  background: #f4f3f4;
+  color: var(--dim-text);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 32px;
+  background: var(--white);
+  border-bottom: 1px solid #ddd;
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+  }
+}
+
+.back {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.file-count {
+  color: #707070;
+  margin-left: auto;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 24px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 28px 32px;
+}
+
+.queue {
+  min-width: 0;
+  background: var(--white);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+}
+.button,
+.primary,
+.download-all {
+  font: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 5px;
+  border: 1px solid #bbb;
+  background: var(--white);
+  color: var(--dim-text);
+}
+
+.text-button {
+  font: inherit;
+  border: 0;
+  padding: 8px 2px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  min-height: 44px;
+}
+.batch button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.batch button:focus-visible,
+.batch a:focus-visible,
+.batch select:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+}
+.table-scroll {
+  overflow-x: auto;
+  touch-action: pan-x pan-y;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  th {
+    font-weight: normal;
+    color: #666;
+    background: #f8f8f8;
+  }
+  th,
+  td {
+    padding: 16px;
+    border-top: 1px solid #eee;
+  }
+  th:first-child,
+  td:first-child {
+    padding-left: 20px;
+  }
+  th:not(:first-child),
+  td:not(:first-child) {
+    white-space: nowrap;
+  }
+}
+.file-cell {
+  width: 40%;
+  min-width: 150px;
+  max-width: 360px;
+}
+.filename {
+  overflow-wrap: anywhere;
+  font-weight: bold;
+}
+.note {
+  display: block;
+  font-size: 12px;
+  color: #777;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.error {
+  color: #b4233d;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.file-cell .error {
+  display: block;
+  margin-top: 6px;
+}
+.success {
+  color: #187345;
+}
+.row-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  a {
+    color: #a51b55;
+    text-decoration: none;
+    padding: 8px 0;
+  }
+}
+.empty {
+  padding: 70px 24px;
+  text-align: center;
+  h2 {
+    font-size: 20px;
+  }
+  p {
+    color: #777;
+    line-height: 1.7;
+  }
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  justify-content: space-between;
+  padding: 20px;
+  border-top: 1px solid #eee;
+  font-size: 13px;
+}
+.settings {
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--off-black);
+  color: var(--white);
+  h2 {
+    font-size: 17px;
+    margin: 0;
+    padding: 20px;
+    border-bottom: 1px solid #444;
+  }
+}
+.fields {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  border: 0;
+}
+.fields:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.format-label {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  select {
+    font: inherit;
+    width: 100%;
+    padding: 12px;
+    color: var(--white);
+    background: var(--dark-gray);
+    border: 1px solid #666;
+    border-radius: 4px;
+  }
+}
+.actions {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid #444;
+  progress {
+    width: 100%;
+    height: 6px;
+    accent-color: var(--pink);
+  }
+}
+.progress-text {
+  margin: 0 0 6px;
+  color: #ccc;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.primary {
+  background: #c91860;
+  color: var(--white);
+  border-color: #c91860;
+}
+.download-all {
+  background: transparent;
+  color: var(--white);
+  border-color: #777;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    gap: 16px;
+    padding: 20px 16px;
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .header {
+    padding: 12px 16px;
+  }
+}
+@media (max-width: 700px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings {
+    grid-row: 1;
+  }
+  .table th,
+  .table td {
+    padding: 12px;
+  }
+  .file-count {
+    font-size: 12px;
+  }
+}

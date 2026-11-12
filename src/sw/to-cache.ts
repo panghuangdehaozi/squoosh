@@ -16,6 +16,7 @@ function subtractSets<T extends any>(set1: Set<T>, set2: Set<T>): Set<T> {
 import * as initialApp from 'entry-data:client/initial-app';
 import swUrl from 'service-worker:sw';
 import * as compress from 'entry-data:client/lazy-app/Compress';
+import * as batch from 'entry-data:client/lazy-app/Batch';
 import * as swBridge from 'entry-data:client/lazy-app/sw-bridge';
 import * as blobAnim from 'entry-data:shared/prerendered-app/Intro/blob-anim';
 
@@ -52,6 +53,8 @@ import * as wp2Enc from 'entry-data:codecs/wp2/enc/wp2_enc';
 let initialJs = new Set([
   compress.main,
   ...compress.deps,
+  batch.main,
+  ...batch.deps,
   swBridge.main,
   ...swBridge.deps,
   blobAnim.main,
@@ -61,10 +64,9 @@ initialJs = subtractSets(
   initialJs,
   new Set([
     initialApp.main,
-    ...initialApp.deps.filter(
-      (item) =>
-        // Exclude JS deps that have been inlined:
-        item.endsWith('.js'),
+    ...initialApp.deps.filter((item) =>
+      // Exclude JS deps that have been inlined:
+      item.endsWith('.js'),
     ),
     // Exclude features Worker itself - it's referenced from the main app,
     // but is meant to be cached lazily.

@@ -15,6 +15,7 @@ import 'shared/custom-els/loading-spinner';
 const ROUTE_EDITOR = '/editor';
 
 const compressPromise = import('client/lazy-app/Compress');
+const batchPromise = import('client/lazy-app/Batch');
 const swBridgePromise = import('client/lazy-app/sw-bridge');
 
 function back() {
@@ -27,7 +28,10 @@ interface State {
   awaitingShareTarget: boolean;
   file?: File;
   isEditorOpen: Boolean;
+  isBatchOpen: boolean;
+  batchFiles: File[];
   Compress?: typeof import('client/lazy-app/Compress').default;
+  Batch?: typeof import('client/lazy-app/Batch').default;
 }
 
 export default class App extends Component<Props, State> {
@@ -36,11 +40,15 @@ export default class App extends Component<Props, State> {
       'share-target',
     ),
     isEditorOpen: false,
+    isBatchOpen: false,
+    batchFiles: [],
     file: undefined,
     Compress: undefined,
+    Batch: undefined,
   };
 
   snackbar?: SnackBarElement;
+  private batch?: import('client/lazy-app/Batch').default;
 
   constructor() {
     super();
@@ -53,6 +61,14 @@ export default class App extends Component<Props, State> {
         this.showSnack('应用加载失败');
       });
 
+    batchPromise
+      .then((module) => {
+        this.setState({ Batch: module.default });
+      })
+      .catch(() => {
+        this.showSnack('批量压缩加载失败');
+      });
+
     swBridgePromise.then(async ({ offliner, getSharedImage }) => {
       offliner(this.showSnack);
       if (!this.state.awaitingShareTarget) return;
@@ -60,7 +76,7 @@ export default class App extends Component<Props, State> {
       // Remove the ?share-target from the URL
       history.replaceState('', '', '/');
       this.openEditor();
-      this.setState({ file, awaitingShareTarget: false });
+      this.setState({ file, awaitingShareTarget: false, isBatchOpen: false });
     });
 
     // Since iOS 10, Apple tries to prevent disabling pinch-zoom. This is great in theory, but
@@ -76,14 +92,44 @@ export default class App extends Component<Props, State> {
 
   private onFileDrop = ({ files }: FileDropEvent) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    this.openEditor();
-    this.setState({ file });
+    this.onFiles(Array.from(files));
   };
 
   private onIntroPickFile = (file: File) => {
+    this.onFiles([file]);
+  };
+
+  private onFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    if (this.state.isEditorOpen && this.state.isBatchOpen) {
+      if (this.batch) {
+        this.batch.addFiles(files);
+      } else {
+        this.setState((state) => ({
+          batchFiles: [...state.batchFiles, ...files],
+        }));
+      }
+      return;
+    }
+    if (files.length > 1) {
+      this.openBatch(files);
+      return;
+    }
     this.openEditor();
-    this.setState({ file });
+    this.setState({ file: files[0], isBatchOpen: false, batchFiles: [] });
+  };
+
+  private openBatch = (files: File[]) => {
+    this.openEditor();
+    this.setState({ isBatchOpen: true, batchFiles: files, file: undefined });
+  };
+
+  private onBatchOpen = () => {
+    this.openBatch([]);
+  };
+
+  private onBatchFilesChange = (files: File[]) => {
+    this.setState({ batchFiles: files });
   };
 
   private showSnack = (
@@ -109,21 +155,52 @@ export default class App extends Component<Props, State> {
 
   render(
     {}: Props,
-    { file, isEditorOpen, Compress, awaitingShareTarget }: State,
+    {
+      file,
+      isEditorOpen,
+      isBatchOpen,
+      batchFiles,
+      Compress,
+      Batch,
+      awaitingShareTarget,
+    }: State,
   ) {
-    const showSpinner = awaitingShareTarget || (isEditorOpen && !Compress);
+    const showSpinner =
+      awaitingShareTarget ||
+      (isEditorOpen && !(isBatchOpen ? Batch : Compress));
 
     return (
       <div class={style.app}>
-        <file-drop onfiledrop={this.onFileDrop} class={style.drop}>
+        <file-drop multiple onfiledrop={this.onFileDrop} class={style.drop}>
           {showSpinner ? (
             <loading-spinner class={style.appLoader} />
           ) : isEditorOpen ? (
-            Compress && (
-              <Compress file={file!} showSnack={this.showSnack} onBack={back} />
+            isBatchOpen ? (
+              Batch && (
+                <Batch
+                  ref={linkRef(this, 'batch')}
+                  files={batchFiles}
+                  onFilesChange={this.onBatchFilesChange}
+                  showSnack={this.showSnack}
+                  onBack={back}
+                />
+              )
+            ) : (
+              Compress && (
+                <Compress
+                  file={file!}
+                  showSnack={this.showSnack}
+                  onBack={back}
+                />
+              )
             )
           ) : (
-            <Intro onFile={this.onIntroPickFile} showSnack={this.showSnack} />
+            <Intro
+              onFile={this.onIntroPickFile}
+              onFiles={this.onFiles}
+              onBatch={this.onBatchOpen}
+              showSnack={this.showSnack}
+            />
           )}
           <snack-bar ref={linkRef(this, 'snackbar')} />
         </file-drop>

@@ -31,6 +31,8 @@ async function getImageClipboardItem(
 
 interface Props {
   onFile?: (file: File) => void;
+  onFiles?: (files: File[]) => void;
+  onBatch?: () => void;
   showSnack?: SnackBarElement['showSnackbar'];
 }
 interface State {
@@ -78,10 +80,10 @@ export default class Intro extends Component<Props, State> {
 
   private onFileChange = (event: Event): void => {
     const fileInput = event.target as HTMLInputElement;
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) return;
+    const files = Array.from(fileInput.files || []);
+    if (files.length === 0) return;
     this.fileInput!.value = '';
-    this.props.onFile!(file);
+    this.props.onFiles!(files);
   };
 
   private onOpenClick = () => {
@@ -167,16 +169,15 @@ export default class Intro extends Component<Props, State> {
     this.props.onFile!(new File([blob], 'image.unknown'));
   };
 
-  render(
-    {}: Props,
-    { beforeInstallEvent, showBlobSVG }: State,
-  ) {
+  render({}: Props, { beforeInstallEvent, showBlobSVG }: State) {
     return (
       <div class={style.intro}>
         <input
           class={style.hide}
           ref={linkRef(this, 'fileInput')}
           type="file"
+          accept="image/*,.jxl,.wp2,.qoi"
+          multiple
           onChange={this.onFileChange}
         />
         <div class={style.main}>
@@ -225,7 +226,11 @@ export default class Intro extends Component<Props, State> {
               class={style.loadImgContent}
               style={{ visibility: __PRERENDER__ ? 'hidden' : '' }}
             >
-              <button class={style.loadBtn} onClick={this.onOpenClick}>
+              <button
+                class={style.loadBtn}
+                onClick={this.onOpenClick}
+                aria-label="选择图片，支持多选"
+              >
                 <svg viewBox="0 0 24 24" class={style.loadIcon}>
                   <path d="M19 7v3h-2V7h-3V5h3V2h2v3h3v2h-3zm-3 4V8h-3V5H5a2 2 0 00-2 2v12c0 1.1.9 2 2 2h12a2 2 0 002-2v-8h-3zM5 19l3-4 2 3 3-4 4 5H5z" />
                 </svg>
@@ -240,6 +245,9 @@ export default class Intro extends Component<Props, State> {
                   '粘贴'
                 )}
               </div>
+              <button class={style.batchBtn} onClick={this.props.onBatch}>
+                批量压缩
+              </button>
             </div>
           </div>
         </div>
@@ -260,7 +268,8 @@ export default class Intro extends Component<Props, State> {
                 <div class={style.infoTextWrapper}>
                   <h2 class={style.infoTitle}>更小</h2>
                   <p class={style.infoCaption}>
-                    图片越小，加载越快。Squoosh 可以在保持高画质的同时减小文件体积。
+                    图片越小，加载越快。Squoosh
+                    可以在保持高画质的同时减小文件体积。
                   </p>
                 </div>
                 <div class={style.infoImgWrapper}>
